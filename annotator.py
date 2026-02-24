@@ -14,7 +14,7 @@ import tempfile
 import torch
 import base64
 
-from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QProgressBar, QComboBox, QScrollArea, QDockWidget, QMessageBox
+from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QProgressBar, QComboBox, QScrollArea, QDockWidget, QMessageBox, QSlider
 from PyQt5.QtGui import QPixmap, QIcon, QImage
 from PyQt5.Qt import QSize
 from qtpy.QtCore import Qt
@@ -39,9 +39,8 @@ Click = namedtuple('Click', ['is_positive', 'coords'])
 
 from segment_anything import sam_model_registry, SamPredictor
 
-
-
-
+# TODO Change progress bar from percentage to sum
+# TODO Add slider to scrub
 
 LABEL_COLORMAP = imgviz.label_colormap()
 
@@ -49,7 +48,7 @@ class MainWindow(QMainWindow):
 
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = 0, 1, 2
 
-    def __init__(self, parent=None, global_w=1000, global_h=1800, model_type='vit_b', keep_input_size=True, max_size=1080):
+    def __init__(self, parent=None, global_w=1000, global_h=2000, model_type='vit_b', keep_input_size=True, max_size=1080):
         super(MainWindow, self).__init__(parent)
         self.resize(global_w, global_h)
         self.model_type = model_type
@@ -149,10 +148,6 @@ class MainWindow(QMainWindow):
         self.button_last = QPushButton('Last Image', self)
         self.button_last.clicked.connect(self.clickButtonLast)
 
-        self.img_progress_bar = QProgressBar(self)
-        self.img_progress_bar.setMinimum(0)
-        self.img_progress_bar.setMaximum(1)
-        self.img_progress_bar.setValue(0)
         self.button_proposal1 = QPushButton('Proposal1', self)
         self.button_proposal1.clicked.connect(self.choose_proposal1)
         self.button_proposal1.setShortcut('1')
@@ -169,36 +164,89 @@ class MainWindow(QMainWindow):
         
         self.class_on_flag = True
         self.class_on_text = QLabel("Class On", self)
-        
 
-        #naive layout
+        # -------- Image / Directory Info --------
+        self.label_image_name = QLabel("Image: None", self)
+        self.label_image_dir = QLabel("Image Dir: None", self)
+        self.label_save_dir = QLabel(f"Save Dir: {self.current_output_dir}", self)
+
+        # -------- Progress Display --------
+        self.img_progress_bar = QProgressBar(self)
+        self.img_progress_bar.setMinimum(0)
+        self.img_progress_bar.setMaximum(1)
+        self.img_progress_bar.setValue(0)
+        self.img_progress_bar.setFormat("0 / 0")
+        self.img_progress_bar.setTextVisible(True)
+
+        # -------- Slice Slider --------
+        self.slice_slider = QSlider(Qt.Horizontal, self)
+        self.slice_slider.setMinimum(0)
+        self.slice_slider.setMaximum(0)
+        self.slice_slider.setValue(0)
+        self.slice_slider.valueChanged.connect(self.sliderChanged)
+
+        # -------- Layout --------
         self.scrollArea.move(int(0.02 * global_w), int(0.08 * global_h))
-        self.scrollArea.resize(int(0.75 * global_w), int(0.7 * global_h))
-        self.shape_dock.move(int(0.79 * global_w), int(0.08 * global_h))
-        self.shape_dock.resize(int(0.2 * global_w), int(0.7 * global_h))
-        self.button_next.move(int(0.18 * global_w), int(0.85 * global_h))
-        self.button_next.resize(int(0.1 * global_w),int(0.04 * global_h))
-        self.button_last.move(int(0.01 * global_w), int(0.85 * global_h))
-        self.button_last.resize(int(0.1 * global_w),int(0.04 * global_h))
-        self.class_on_text.move(int(0.01 * global_w), int(0.9 * global_h))
-        self.img_progress_bar.move(int(0.01 * global_w), int(0.8 * global_h))
-        self.img_progress_bar.resize(int(0.3 * global_w),int(0.04 * global_h))
-        
-        self.button_proposal1.resize(int(0.17 * global_w),int(0.14 * global_h))
-        self.button_proposal1.move(int(0.33 * global_w), int(0.8 * global_h))
-        self.button_proposal2.resize(int(0.17 * global_w),int(0.14 * global_h))
-        self.button_proposal2.move(int(0.50 * global_w), int(0.8 * global_h))
-        self.button_proposal3.resize(int(0.17 * global_w),int(0.14 * global_h))
-        self.button_proposal3.move(int(0.67 * global_w), int(0.8 * global_h))
-        self.button_proposal4.resize(int(0.17 * global_w),int(0.14 * global_h))
-        self.button_proposal4.move(int(0.84 * global_w), int(0.8 * global_h))
-        
-        
-        
-        self.zoomWidget = ZoomWidget()
+        self.scrollArea.resize(int(0.75 * global_w), int(0.65 * global_h))
 
+        self.shape_dock.move(int(0.79 * global_w), int(0.08 * global_h))
+        self.shape_dock.resize(int(0.2 * global_w), int(0.65 * global_h))
+
+        # Slider
+        self.slice_slider.move(int(0.01 * global_w), int(0.77 * global_h))
+        self.slice_slider.resize(int(0.75 * global_w), 25)
+
+        # Progress
+        self.img_progress_bar.move(int(0.01 * global_w), int(0.81 * global_h))
+        self.img_progress_bar.resize(int(0.3 * global_w), int(0.04 * global_h))
+
+        # Navigation buttons
+        self.button_last.move(int(0.01 * global_w), int(0.87 * global_h))
+        self.button_last.resize(int(0.1 * global_w), int(0.04 * global_h))
+
+        self.button_next.move(int(0.13 * global_w), int(0.87 * global_h))
+        self.button_next.resize(int(0.1 * global_w), int(0.04 * global_h))
+
+        # Below navitation buttons
+        self.class_on_text.move(int(0.01 * global_w), int(0.92 * global_h))
+
+        # -------- Info labels BELOW Class On --------
+        class_y = int(0.92 * global_h)
+        info_spacing = 22
+
+        self.label_image_dir.move(int(0.01 * global_w), class_y + info_spacing)
+        self.label_image_dir.resize(int(0.75 * global_w), 20)
+
+        self.label_save_dir.move(int(0.01 * global_w), class_y + info_spacing * 2)
+        self.label_save_dir.resize(int(0.75 * global_w), 20)
+
+        self.label_image_name.move(int(0.01 * global_w), class_y + info_spacing * 3)
+        self.label_image_name.resize(int(0.75 * global_w), 20)
+
+        # Proposal buttons
+        self.button_proposal1.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal1.move(int(0.33 * global_w), int(0.8 * global_h))
+
+        self.button_proposal2.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal2.move(int(0.50 * global_w), int(0.8 * global_h))
+
+        self.button_proposal3.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal3.move(int(0.67 * global_w), int(0.8 * global_h))
+
+        self.button_proposal4.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal4.move(int(0.84 * global_w), int(0.8 * global_h))
+
+        # Auto repeat navigation
+        self.button_next.setAutoRepeat(True)
+        self.button_next.setAutoRepeatDelay(500)
+        self.button_next.setAutoRepeatInterval(50)
+
+        self.button_last.setAutoRepeat(True)
+        self.button_last.setAutoRepeatDelay(500)
+        self.button_last.setAutoRepeatInterval(50)
+
+        self.zoomWidget = ZoomWidget()
         action = functools.partial(utils.newAction, self)
-        
 
         categoryFile = action(
             self.tr("Category File"),
@@ -642,8 +690,15 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap(self.current_img)
         #pixmap = pixmap.scaled(int(0.75 * global_w), int(0.7 * global_h))
         self.canvas.loadPixmap(pixmap)
-        self.img_progress_bar.setValue(self.current_img_index)
+        current_display = self.current_img_index + 1
+        self.img_progress_bar.setMaximum(self.img_len)
+        self.img_progress_bar.setValue(current_display)
+        self.img_progress_bar.setFormat(f"{current_display} / {self.img_len}")
 
+        self.slice_slider.blockSignals(True)
+        self.slice_slider.setMaximum(self.img_len - 1)
+        self.slice_slider.setValue(self.current_img_index)
+        self.slice_slider.blockSignals(False)
         img_name = os.path.basename(self.current_img)[:-4]
         self.current_output_filename = osp.join(self.current_output_dir, img_name + '.json')
         self.labelList.clear()
@@ -651,6 +706,7 @@ class MainWindow(QMainWindow):
             self.loadAnno(self.current_output_filename)
         self.image_encoded_flag = False
         self.current_img_data = LabelFile.load_image_file(self.current_img)
+        self.label_image_name.setText(f"Image: {os.path.basename(self.current_img)}")
 
 
     def clickFileChoose(self):
@@ -668,6 +724,9 @@ class MainWindow(QMainWindow):
         self.img_progress_bar.setMinimum(0)
         self.img_progress_bar.setMaximum(self.img_len-1)
         self.loadImg()
+        self.label_image_dir.setText(f"Image Dir: {directory}")
+        self.label_image_name.setText(f"Image: {os.path.basename(self.current_img)}")
+        self.label_save_dir.setText(f"Save Dir: {self.current_output_dir}")
 
     def clickSaveChoose(self):
         directory = QFileDialog.getExistingDirectory(self, 'choose target fold','.')
@@ -675,6 +734,7 @@ class MainWindow(QMainWindow):
             return
         else:
             self.current_output_dir = directory
+            self.label_save_dir.setText(f"Save Dir: {self.current_output_dir}")
             os.makedirs(self.current_output_dir, exist_ok=True)
             self.loadImg()
             return directory
@@ -1067,6 +1127,15 @@ class MainWindow(QMainWindow):
         if actions:
             utils.addActions(toolbar, actions)
         return toolbar
+
+    def sliderChanged(self, value):
+        if value != self.current_img_index:
+            if self.actions.save.isEnabled():
+                self.saveFile()
+
+            self.current_img_index = value
+            self.current_img = self.img_list[self.current_img_index]
+            self.loadImg()
 
     def setEditMode(self):
         self.toggleDrawMode(True)
