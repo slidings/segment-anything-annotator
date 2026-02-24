@@ -192,49 +192,104 @@ class MainWindow(QMainWindow):
         self.shape_dock.move(int(0.79 * global_w), int(0.08 * global_h))
         self.shape_dock.resize(int(0.2 * global_w), int(0.65 * global_h))
 
-        # Slider
-        self.slice_slider.move(int(0.01 * global_w), int(0.77 * global_h))
-        self.slice_slider.resize(int(0.75 * global_w), 25)
+        self.bottom_widget = QWidget(self)
+        self.bottom_widget.setGeometry(
+            int(0.01 * global_w),
+            int(0.75 * global_h),
+            int(0.98 * global_w),
+            int(0.23 * global_h)
+        )
 
-        # Progress
-        self.img_progress_bar.move(int(0.01 * global_w), int(0.81 * global_h))
-        self.img_progress_bar.resize(int(0.3 * global_w), int(0.04 * global_h))
+        self.bottom_layout = QtWidgets.QHBoxLayout(self.bottom_widget)
+        self.bottom_layout.setContentsMargins(10, 10, 10, 10)
+        self.bottom_layout.setSpacing(20)
 
-        # Navigation buttons
-        self.button_last.move(int(0.01 * global_w), int(0.87 * global_h))
-        self.button_last.resize(int(0.1 * global_w), int(0.04 * global_h))
+        left_panel = QtWidgets.QVBoxLayout()
+        left_panel.setSpacing(8)
 
-        self.button_next.move(int(0.13 * global_w), int(0.87 * global_h))
-        self.button_next.resize(int(0.1 * global_w), int(0.04 * global_h))
+        left_panel.addWidget(self.slice_slider)
+        left_panel.addWidget(self.img_progress_bar)
 
-        # Below navitation buttons
-        self.class_on_text.move(int(0.01 * global_w), int(0.92 * global_h))
+        # nav buttons row
+        nav_layout = QtWidgets.QHBoxLayout()
+        self.button_last.setMinimumHeight(50)
+        self.button_next.setMinimumHeight(50)
+        self.button_last.setMinimumWidth(200)
+        self.button_next.setMinimumWidth(200)
+        nav_layout.addWidget(self.button_last)
+        nav_layout.addWidget(self.button_next)
+        nav_layout.addStretch()
 
-        # -------- Info labels BELOW Class On --------
-        class_y = int(0.92 * global_h)
-        info_spacing = 22
+        left_panel.addLayout(nav_layout)
 
-        self.label_image_dir.move(int(0.01 * global_w), class_y + info_spacing)
-        self.label_image_dir.resize(int(0.75 * global_w), 20)
+        # info labels
+        self.label_image_dir.setWordWrap(True)
+        self.label_save_dir.setWordWrap(True)
+        self.label_image_name.setWordWrap(True)
 
-        self.label_save_dir.move(int(0.01 * global_w), class_y + info_spacing * 2)
-        self.label_save_dir.resize(int(0.75 * global_w), 20)
+        left_panel.addWidget(self.class_on_text)
+        left_panel.addWidget(self.label_image_dir)
+        left_panel.addWidget(self.label_save_dir)
+        left_panel.addWidget(self.label_image_name)
 
-        self.label_image_name.move(int(0.01 * global_w), class_y + info_spacing * 3)
-        self.label_image_name.resize(int(0.75 * global_w), 20)
+        left_panel.addStretch()
 
-        # Proposal buttons
-        self.button_proposal1.resize(int(0.17 * global_w), int(0.14 * global_h))
-        self.button_proposal1.move(int(0.33 * global_w), int(0.8 * global_h))
+        right_panel = QtWidgets.QGridLayout()
+        right_panel.setSpacing(10)
 
-        self.button_proposal2.resize(int(0.17 * global_w), int(0.14 * global_h))
-        self.button_proposal2.move(int(0.50 * global_w), int(0.8 * global_h))
+        for i, btn in enumerate(self.button_proposal_list):
+            btn.setMinimumSize(120, 120)
+            btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding
+            )
+            right_panel.addWidget(btn, i // 2, i % 2)
 
-        self.button_proposal3.resize(int(0.17 * global_w), int(0.14 * global_h))
-        self.button_proposal3.move(int(0.67 * global_w), int(0.8 * global_h))
+        self.bottom_layout.addLayout(left_panel, 3)
+        self.bottom_layout.addLayout(right_panel, 2)
+        # # Slider
+        # self.slice_slider.move(int(0.01 * global_w), int(0.77 * global_h))
+        # self.slice_slider.resize(int(0.75 * global_w), 25)
 
-        self.button_proposal4.resize(int(0.17 * global_w), int(0.14 * global_h))
-        self.button_proposal4.move(int(0.84 * global_w), int(0.8 * global_h))
+        # # Progress
+        # self.img_progress_bar.move(int(0.01 * global_w), int(0.81 * global_h))
+        # self.img_progress_bar.resize(int(0.3 * global_w), int(0.04 * global_h))
+
+        # # Navigation buttons
+        # self.button_last.move(int(0.01 * global_w), int(0.87 * global_h))
+        # self.button_last.resize(int(0.1 * global_w), int(0.04 * global_h))
+
+        # self.button_next.move(int(0.13 * global_w), int(0.87 * global_h))
+        # self.button_next.resize(int(0.1 * global_w), int(0.04 * global_h))
+
+        # # Below navitation buttons
+        # self.class_on_text.move(int(0.01 * global_w), int(0.92 * global_h))
+
+        # # -------- Info labels BELOW Class On --------
+        # class_y = int(0.92 * global_h)
+        # info_spacing = 22
+
+        # self.label_image_dir.move(int(0.01 * global_w), class_y + info_spacing)
+        # self.label_image_dir.resize(int(0.75 * global_w), 20)
+
+        # self.label_save_dir.move(int(0.01 * global_w), class_y + info_spacing * 2)
+        # self.label_save_dir.resize(int(0.75 * global_w), 20)
+
+        # self.label_image_name.move(int(0.01 * global_w), class_y + info_spacing * 3)
+        # self.label_image_name.resize(int(0.75 * global_w), 20)
+
+        # # Proposal buttons
+        # self.button_proposal1.resize(int(0.17 * global_w), int(0.14 * global_h))
+        # self.button_proposal1.move(int(0.33 * global_w), int(0.8 * global_h))
+
+        # self.button_proposal2.resize(int(0.17 * global_w), int(0.14 * global_h))
+        # self.button_proposal2.move(int(0.50 * global_w), int(0.8 * global_h))
+
+        # self.button_proposal3.resize(int(0.17 * global_w), int(0.14 * global_h))
+        # self.button_proposal3.move(int(0.67 * global_w), int(0.8 * global_h))
+
+        # self.button_proposal4.resize(int(0.17 * global_w), int(0.14 * global_h))
+        # self.button_proposal4.move(int(0.84 * global_w), int(0.8 * global_h))
 
         # Auto repeat navigation
         self.button_next.setAutoRepeat(True)
