@@ -570,10 +570,11 @@ class MainWindow(QMainWindow):
         self._saveFile(self.current_output_filename)
 
     def _saveFile(self, filename):
-        video_name = os.path.basename(os.path.basename(self.current_video))
-        os.makedirs(os.path.join(self.current_output_dir, video_name), exist_ok=True)
+        output_dir = os.path.join(self.current_video, 'output')
+        os.makedirs(output_dir, exist_ok=True)
         if filename and self.saveLabels(filename):
             self.setClean()
+
 
     def saveLabels(self, filename):
         lf = LabelFile()
@@ -759,10 +760,10 @@ class MainWindow(QMainWindow):
         self.canvas.loadPixmap(pixmap)
 
         img_name = os.path.basename(self.current_img)[:-4]
-        video_name = os.path.basename(self.current_video)
-        self.current_output_filename = os.path.join(
-            self.current_output_dir, video_name, img_name + '.json'
-        )
+        output_dir = os.path.join(self.current_video, 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        self.current_output_filename = os.path.join(output_dir, img_name + '.json')
+
         self.labelList.clear()
         if os.path.isfile(self.current_output_filename):
             self.loadAnno(self.current_output_filename)
@@ -771,9 +772,7 @@ class MainWindow(QMainWindow):
         self.img_progress_bar.setMinimum(0)
         self.img_progress_bar.setMaximum(self.img_len - 1)
         self.img_progress_bar.setValue(self.current_img_index)
-        
 
-        # Sync slider
         self.img_slider.blockSignals(True)
         self.img_slider.setMinimum(0)
         self.img_slider.setMaximum(self.img_len - 1)
@@ -783,12 +782,12 @@ class MainWindow(QMainWindow):
 
         self.current_img_data = LabelFile.load_image_file(self.current_img)
         self.updateInfoLabel()
-
+        
     def updateInfoLabel(self):
         img_name = os.path.abspath(self.current_img) if self.current_img else "None"
         img_dir = os.path.abspath(self.current_video) if self.current_video else "None"
         save_dir = os.path.abspath(self.current_output_dir) if self.current_output_dir else "None"
-        self.info_label.setText(f"img: {img_name}\ndir: {img_dir}\nsave: {save_dir}")
+        self.info_label.setText(f"img: {img_name}\ndir: {img_dir}") #\nsave: {save_dir}") Save directory is default to output folder in accession
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -844,28 +843,38 @@ class MainWindow(QMainWindow):
         self.loadImg()
     
     def clickFileChoose(self):
-        directory = QFileDialog.getExistingDirectory(self, 'choose target fold','.')
+        directory = QFileDialog.getExistingDirectory(self, 'choose target fold', '.')
         if directory == '':
             return
-        #self.img_list = glob.glob(directory + '/*.{jpg,png,JPG,PNG}')
-        self.video_list = glob.glob(directory + '/*')
-        self.video_list.sort()
+        self.video_root = directory
+        self.video_list = []
+        for patient in sorted(glob.glob(os.path.join(directory, '*'))):
+            for patient2 in sorted(glob.glob(os.path.join(patient, '*'))):
+                for date in sorted(glob.glob(os.path.join(patient2, '*'))):
+                    for accession in sorted(glob.glob(os.path.join(date, '*'))):
+                        imgs = glob.glob(os.path.join(accession, '*.jpg')) + \
+                            glob.glob(os.path.join(accession, '*.png'))
+                        if imgs:
+                            self.video_list.append(accession)
+
         self.video_len = len(self.video_list)
         if self.video_len == 0:
             return
-        # self.video_progress_bar.setMinimum(0)
-        # self.video_progress_bar.setMaximum(self.video_len-1)
+
         self.current_video_index = 0
         self.current_video = self.video_list[self.current_video_index]
-        self.img_list = glob.glob(self.video_list[0] + '/*.jpg') + glob.glob(self.video_list[0] + '/*.png')
-        self.img_list.sort()
+        self.img_list = sorted(
+            glob.glob(os.path.join(self.current_video, '*.jpg')) +
+            glob.glob(os.path.join(self.current_video, '*.png'))
+        )
         self.img_len = len(self.img_list)
         if self.img_len == 0:
             return
+
         self.current_img_index = 0
         self.current_img = self.img_list[self.current_img_index]
         self.loadImg()
-
+        
     def clickSaveChoose(self):
         directory = QFileDialog.getExistingDirectory(self, 'choose target fold','.')
         if directory == '':
