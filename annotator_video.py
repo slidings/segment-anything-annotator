@@ -165,9 +165,19 @@ class MainWindow(QMainWindow):
         self.button_next = QPushButton('Next Image (n)', self)
         self.button_next.clicked.connect(self.clickButtonNext)
         self.button_next.setShortcut('n')
+        
         self.button_last = QPushButton('Last Image (b)', self)
         self.button_last.clicked.connect(self.clickButtonLast)
         self.button_last.setShortcut('b')
+
+        # Auto repeat navigation
+        self.button_next.setAutoRepeat(True)
+        self.button_next.setAutoRepeatDelay(500)
+        self.button_next.setAutoRepeatInterval(50)
+
+        self.button_last.setAutoRepeat(True)
+        self.button_last.setAutoRepeatDelay(500)
+        self.button_last.setAutoRepeatInterval(50)
 
         self.button_next_video = QPushButton('Next Video', self)
         self.button_next_video.clicked.connect(self.clickButtonNextVideo)
@@ -178,11 +188,22 @@ class MainWindow(QMainWindow):
         self.img_progress_bar.setMinimum(0)
         self.img_progress_bar.setMaximum(1)
         self.img_progress_bar.setValue(0)
+        self.img_progress_bar.setFormat("%v / %m")
 
-        self.video_progress_bar = QProgressBar(self)
-        self.video_progress_bar.setMinimum(0)
-        self.video_progress_bar.setMaximum(1)
-        self.video_progress_bar.setValue(0)
+
+        # self.video_progress_bar = QProgressBar(self)
+        # self.video_progress_bar.setMinimum(0)
+        # self.video_progress_bar.setMaximum(1)
+        # self.video_progress_bar.setValue(0)
+        # self.video_progress_bar.setFormat("%v / %m")
+
+        # Image slider
+        self.img_slider = QtWidgets.QSlider(Qt.Horizontal, self)
+        self.img_slider.setMinimum(0)
+        self.img_slider.setMaximum(1)
+        self.img_slider.setValue(0)
+        self.img_slider.valueChanged.connect(self.onImgSliderChanged)
+        self.img_slider.setEnabled(False)
 
         self.button_proposal1 = QPushButton('Proposal1', self)
         self.button_proposal1.clicked.connect(self.choose_proposal1)
@@ -210,6 +231,12 @@ class MainWindow(QMainWindow):
         self.class_on_text = QLabel("Class On", self)
         self.tracked_object_text = QLabel("Tracked_object:", self)
 
+        # Info labels
+        self.info_label = QLabel("No image loaded", self)
+        self.info_label.setWordWrap(True)
+        self.info_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+
         #naive layout
         self.scrollArea.move(int(0.02 * global_w), int(0.08 * global_h))
         self.scrollArea.resize(int(0.75 * global_w), int(0.7 * global_h))
@@ -220,13 +247,15 @@ class MainWindow(QMainWindow):
         self.button_last.move(int(0.01 * global_w), int(0.82 * global_h))
         self.button_last.resize(int(0.13 * global_w),int(0.04 * global_h))
         self.button_next_video.resize(int(0.13 * global_w),int(0.04 * global_h))
-        self.button_next_video.move(int(0.14 * global_w), int(0.89 * global_h))
+        self.button_next_video.move(int(0.14 * global_w), int(0.95 * global_h))
         self.button_last_video.resize(int(0.13 * global_w),int(0.04 * global_h))
-        self.button_last_video.move(int(0.01 * global_w), int(0.89 * global_h))
+        self.button_last_video.move(int(0.01 * global_w), int(0.95 * global_h))
         self.img_progress_bar.move(int(0.01 * global_w), int(0.8 * global_h))
         self.img_progress_bar.resize(int(0.25 * global_w),int(0.02 * global_h))
-        self.video_progress_bar.move(int(0.01 * global_w), int(0.87 * global_h))
-        self.video_progress_bar.resize(int(0.25 * global_w),int(0.02 * global_h))
+        # self.video_progress_bar.move(int(0.01 * global_w), int(0.87 * global_h))
+        # self.video_progress_bar.resize(int(0.25 * global_w),int(0.02 * global_h))
+        self.img_slider.move(int(0.01 * global_w), int(0.86 * global_h))
+        self.img_slider.resize(int(0.25 * global_w), int(0.02 * global_h))
 
         self.button_proposal1.resize(int(0.17 * global_w),int(0.14 * global_h))
         self.button_proposal1.move(int(0.27 * global_w), int(0.8 * global_h))
@@ -234,7 +263,8 @@ class MainWindow(QMainWindow):
         self.button_proposal2.move(int(0.44 * global_w), int(0.8 * global_h))
         self.button_proposal3.resize(int(0.17 * global_w),int(0.14 * global_h))
         self.button_proposal3.move(int(0.61 * global_w), int(0.8 * global_h))
-
+        self.info_label.move(int(0.01 * global_w), int(0.87 * global_h))
+        self.info_label.resize(int(0.25 * global_w), int(0.07 * global_h))
         
         self.class_on_text.move(int(0.8 * global_w), int(0.78 * global_h))
         self.tracked_object_text.resize(int(0.2 * global_w), int(0.04 * global_h))
@@ -510,6 +540,11 @@ class MainWindow(QMainWindow):
                 utils.fmtShortcut(self.tr("Ctrl+Wheel")),
             )
         )
+        font = self.info_label.font()
+        font.setPointSize(8)
+        self.info_label.setFont(font)
+        self.updateInfoLabel()
+
         self.zoomWidget.setEnabled(True)
 
         self.zoomWidget.valueChanged.connect(self.paintCanvas)
@@ -669,7 +704,7 @@ class MainWindow(QMainWindow):
         if self.current_video_index < self.video_len - 1:
             self.current_video_index += 1
             self.current_video = self.video_list[self.current_video_index]
-            self.video_progress_bar.setValue(self.current_video_index)
+            # self.video_progress_bar.setValue(self.current_video_index)
             self.img_list = glob.glob(os.path.join(self.current_video, '*.jpg')) + glob.glob(os.path.join(self.current_video, '*.png'))
             self.img_list.sort()
             self.img_len = len(self.img_list)
@@ -684,7 +719,7 @@ class MainWindow(QMainWindow):
         if self.current_video_index > 0:
             self.current_video_index -= 1
             self.current_video = self.video_list[self.current_video_index]
-            self.video_progress_bar.setValue(self.current_video_index)
+            #self.video_progress_bar.setValue(self.current_video_index)
             self.img_list = glob.glob(os.path.join(self.current_video, '*.jpg')) + glob.glob(os.path.join(self.current_video, '*.png'))
             self.img_list.sort()
             self.img_len = len(self.img_list)
@@ -721,23 +756,93 @@ class MainWindow(QMainWindow):
     def loadImg(self):
         self.raw_h, self.raw_w = cv2.imread(self.current_img).shape[:2]
         pixmap = QPixmap(self.current_img)
-        #pixmap = pixmap.scaled(int(0.75 * global_w), int(0.7 * global_h))
         self.canvas.loadPixmap(pixmap)
 
         img_name = os.path.basename(self.current_img)[:-4]
         video_name = os.path.basename(self.current_video)
-        self.current_output_filename = os.path.join(self.current_output_dir, video_name, img_name + '.json')
+        self.current_output_filename = os.path.join(
+            self.current_output_dir, video_name, img_name + '.json'
+        )
         self.labelList.clear()
         if os.path.isfile(self.current_output_filename):
             self.loadAnno(self.current_output_filename)
         self.image_encoded_flag = False
-        
+
         self.img_progress_bar.setMinimum(0)
-        self.img_progress_bar.setMaximum(self.img_len-1)
+        self.img_progress_bar.setMaximum(self.img_len - 1)
         self.img_progress_bar.setValue(self.current_img_index)
+        
+
+        # Sync slider
+        self.img_slider.blockSignals(True)
+        self.img_slider.setMinimum(0)
+        self.img_slider.setMaximum(self.img_len - 1)
+        self.img_slider.setValue(self.current_img_index)
+        self.img_slider.blockSignals(False)
+        self.img_slider.setEnabled(True)
 
         self.current_img_data = LabelFile.load_image_file(self.current_img)
+        self.updateInfoLabel()
 
+    def updateInfoLabel(self):
+        img_name = os.path.abspath(self.current_img) if self.current_img else "None"
+        img_dir = os.path.abspath(self.current_video) if self.current_video else "None"
+        save_dir = os.path.abspath(self.current_output_dir) if self.current_output_dir else "None"
+        self.info_label.setText(f"img: {img_name}\ndir: {img_dir}\nsave: {save_dir}")
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        global_w = self.width()
+        global_h = self.height()
+        
+        self.scrollArea.move(int(0.02 * global_w), int(0.08 * global_h))
+        self.scrollArea.resize(int(0.75 * global_w), int(0.7 * global_h))
+        self.shape_dock.move(int(0.79 * global_w), int(0.08 * global_h))
+        self.shape_dock.resize(int(0.2 * global_w), int(0.7 * global_h))
+        self.button_next.move(int(0.14 * global_w), int(0.82 * global_h))
+        self.button_next.resize(int(0.13 * global_w), int(0.04 * global_h))
+        self.button_last.move(int(0.01 * global_w), int(0.82 * global_h))
+        self.button_last.resize(int(0.13 * global_w), int(0.04 * global_h))
+        self.button_next_video.move(int(0.14 * global_w), int(0.95 * global_h))
+        self.button_next_video.resize(int(0.13 * global_w), int(0.04 * global_h))
+        self.button_last_video.move(int(0.01 * global_w), int(0.95 * global_h))
+        self.button_last_video.resize(int(0.13 * global_w), int(0.04 * global_h))
+        self.img_progress_bar.move(int(0.01 * global_w), int(0.8 * global_h))
+        self.img_progress_bar.resize(int(0.25 * global_w), int(0.02 * global_h))
+        self.img_slider.move(int(0.01 * global_w), int(0.86 * global_h))
+        self.img_slider.resize(int(0.25 * global_w), int(0.02 * global_h))
+        # self.video_progress_bar.move(int(0.01 * global_w), int(0.91 * global_h))
+        # self.video_progress_bar.resize(int(0.25 * global_w), int(0.02 * global_h))
+        self.info_label.move(int(0.01 * global_w), int(0.87 * global_h))
+        self.info_label.resize(int(0.25 * global_w), int(0.07 * global_h))
+        self.button_proposal1.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal1.move(int(0.27 * global_w), int(0.8 * global_h))
+        self.button_proposal2.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal2.move(int(0.44 * global_w), int(0.8 * global_h))
+        self.button_proposal3.resize(int(0.17 * global_w), int(0.14 * global_h))
+        self.button_proposal3.move(int(0.61 * global_w), int(0.8 * global_h))
+        self.class_on_text.move(int(0.8 * global_w), int(0.78 * global_h))
+        self.tracked_object_text.move(int(0.8 * global_w), int(0.81 * global_h))
+        self.tracked_object_text.resize(int(0.2 * global_w), int(0.04 * global_h))
+        self.button_add_track.move(int(0.8 * global_w), int(0.85 * global_h))
+        self.button_add_track.resize(int(0.2 * global_w), int(0.04 * global_h))
+        self.button_add_key_frame.move(int(0.8 * global_w), int(0.89 * global_h))
+        self.button_add_key_frame.resize(int(0.2 * global_w), int(0.04 * global_h))
+        self.button_propagate.move(int(0.8 * global_w), int(0.93 * global_h))
+        self.button_propagate.resize(int(0.2 * global_w), int(0.04 * global_h))
+        self.button_clear_track_memory.move(int(0.8 * global_w), int(0.97 * global_h))
+        self.button_clear_track_memory.resize(int(0.2 * global_w), int(0.03 * global_h))
+
+
+    def onImgSliderChanged(self, value):
+        if value == self.current_img_index:
+            return
+        if self.actions.save.isEnabled():
+            self.saveFile()
+        self.current_img_index = value
+        self.current_img = self.img_list[self.current_img_index]
+        self.loadImg()
+    
     def clickFileChoose(self):
         directory = QFileDialog.getExistingDirectory(self, 'choose target fold','.')
         if directory == '':
@@ -748,8 +853,8 @@ class MainWindow(QMainWindow):
         self.video_len = len(self.video_list)
         if self.video_len == 0:
             return
-        self.video_progress_bar.setMinimum(0)
-        self.video_progress_bar.setMaximum(self.video_len-1)
+        # self.video_progress_bar.setMinimum(0)
+        # self.video_progress_bar.setMaximum(self.video_len-1)
         self.current_video_index = 0
         self.current_video = self.video_list[self.current_video_index]
         self.img_list = glob.glob(self.video_list[0] + '/*.jpg') + glob.glob(self.video_list[0] + '/*.png')
@@ -768,6 +873,7 @@ class MainWindow(QMainWindow):
         else:
             self.current_output_dir = directory
             os.makedirs(self.current_output_dir, exist_ok=True)
+            self.updateInfoLabel()
             self.loadImg()
             return directory
 
@@ -907,6 +1013,8 @@ class MainWindow(QMainWindow):
             return
 
         contour = max(contours, key=cv2.contourArea)
+        # Epsilon can be tuned to make mask more detailed. Lower = more detailed.
+        contour = cv2.approxPolyDP(contour, epsilon=0.5, closed=True) 
 
         if self.brush_active_shape is not None:
             # Editing existing shape

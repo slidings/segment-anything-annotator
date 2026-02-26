@@ -228,11 +228,17 @@ class Canvas(QtWidgets.QWidget):
             self.brush_pos = pos
             if ev.buttons() & QtCore.Qt.LeftButton:
                 x, y = int(pos.x()), int(pos.y())
+                radius = max(1, int(self.brush_size / 2 / self.scale))
                 color = 1 if self.brush_mode == 'add' else 0
-                cv2.circle(self.app.brush_mask, (x, y), self.brush_size // 2, color, -1)
+                # Draw line from last position to current to fill gaps
+                if self.brush_last_pos is not None:
+                    cv2.line(self.app.brush_mask, self.brush_last_pos, (x, y), color, radius * 2)
+                cv2.circle(self.app.brush_mask, (x, y), radius, color, -1)
+                self.brush_last_pos = (x, y)
+            else:
+                self.brush_last_pos = None  # reset when not drawing
             self.update()
-            return  # skip all other mouse logic in brush mode
-        
+            return
         self.prevMovePoint = pos
         self.restoreCursor()
 
@@ -707,6 +713,11 @@ class Canvas(QtWidgets.QWidget):
             #     self.selectedShapesCopy = []
             #     self.repaint()
         elif ev.button() == QtCore.Qt.LeftButton:
+            if ev.button() == QtCore.Qt.LeftButton:
+                if self.brush_mode is not None:
+                    # Save state after each completed stroke
+                    self.app.brush_mask_history.append(self.app.brush_mask.copy())
+                    return
             if self.editing():
                 if (
                     self.hShape is not None
