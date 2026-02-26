@@ -413,6 +413,22 @@ class MainWindow(QMainWindow):
             enabled=True,
         )
 
+        # Tool bar actions to add brush
+        brushAdd = action(
+            self.tr("Brush Add (P)"),
+            lambda: self.enableBrush('add'),
+            'p', "objects", self.tr("Brush to expand mask"), enabled=True,
+        )
+        brushErase = action(
+            self.tr("Brush Erase (O)"),
+            lambda: self.enableBrush('erase'),
+            'o', "objects", self.tr("Brush to shrink mask"), enabled=True,
+        )
+        brushApply = action(
+            self.tr("Apply Brush (F)"),
+            lambda: self.applyBrush(),
+            'f', "objects", self.tr("Finalize brush edits"), enabled=True,
+        )
 
         self.actions = utils.struct(
             categoryFile=categoryFile,
@@ -430,6 +446,9 @@ class MainWindow(QMainWindow):
             editMode=editMode,
             delete=delete,
             reduce_point=reduce_point,
+            brushAdd=brushAdd,        # Brush tool
+            brushErase=brushErase,    # Brush tool
+            brushApply=brushApply,    # Brush tool
             save=save,
             onShapesPresent=(saveAs, hideAll, showAll),
             menu=(
@@ -448,6 +467,11 @@ class MainWindow(QMainWindow):
                 action("&Move here", self.moveShape),
             ),
         )
+        # Brush to segment
+        self.brush_mode = None  # 'add' or 'erase'
+        self.brush_size = 20
+        self.brush_active_shape = None  # shape being edited
+        self.brush_mask = None  # working mask numpy array
 
         self.toolbar = self.addToolBar('Tool')
         self.toolbar.addAction(categoryFile)
@@ -465,6 +489,9 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(editMode)
         self.toolbar.addAction(delete)
         self.toolbar.addAction(reduce_point)
+        self.toolbar.addAction(brushAdd)
+        self.toolbar.addAction(brushErase)
+        self.toolbar.addAction(brushApply)
         self.toolbar.addAction(save)
         self.toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
 
@@ -684,7 +711,7 @@ class MainWindow(QMainWindow):
             self.sam_mask = self.sam_mask_proposal[2]
             self.canvas.setHiding()
             self.canvas.update()
-            
+
     def choose_proposal4(self):
         if len(self.sam_mask_proposal) > 3:
             self.sam_mask = self.sam_mask_proposal[3]
@@ -844,8 +871,81 @@ class MainWindow(QMainWindow):
             self.addmemory(mask, self.current_img_index)
             #self.canvas.selectedShapes = []
             
+    def enableBrush(self, mode):
+        """Enter brush editing mode. Edit selected shape, or create new one if none selected."""
+        selected = self.canvas.selectedShapes
+        
+        if selected:
+            # Existing behavior: edit selected shape
+            self.brush_active_shape = selected[0]
+            points = [(p.x(), p.y()) for p in self.brush_active_shape.points]
+            self.brush_mask = self.polygon2mask(points, (self.raw_h, self.raw_w))
+        else:
+            # No selection: start with a blank mask to draw a new shape
+            if self.current_img == '':
+                QMessageBox.warning(self, "No Image", "Load an image first.")
+                return
+            self.brush_active_shape = None  # signals "new shape" mode
+            self.brush_mask = np.zeros((self.raw_h, self.raw_w), dtype=np.uint8)
 
+        self.canvas.setBrushMode(mode, self.brush_size)
 
+    def applyBrush(self):
+        """Convert brush_mask back to polygon, updating existing or creating new shape."""
+        if self.brush_mask is None:
+            return
+
+        contours, _ = cv2.findContours(
+            self.brush_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if not contours:
+            QMessageBox.warning(self, "Empty Mask", "Nothing was drawn, cancelled.")
+            self.brush_mask = None
+            self.brush_active_shape = None
+            self.brush_mode = None
+            self.canvas.setBrushMode(None, 0)
+            return
+
+        contour = max(contours, key=cv2.contourArea)
+
+        if self.brush_active_shape is not None:
+            # Editing existing shape
+            old_shape = self.brush_active_shape
+            label, group_id = old_shape.label, old_shape.group_id
+            self.remLabels([old_shape])
+            self.canvas.shapes = [s for s in self.canvas.shapes if s is not old_shape]
+        else:
+            # New shape: ask for label
+            label = 'Object'
+            group_id = self.getMaxId() + 1
+            if self.class_on_flag:
+                xx = self.labelDialog.popUp(text=label, flags={}, group_id=group_id)
+                if len(xx) == 4:
+                    label, _, group_id, _ = xx
+                else:
+                    label, _, group_id = xx
+            if label is None:
+                # User cancelled dialog, abort
+                self.brush_mask = None
+                self.brush_active_shape = None
+                self.brush_mode = None
+                self.canvas.setBrushMode(None, 0)
+                return
+            if type(group_id) != int:
+                group_id = self.getMaxId() + 1
+
+        new_shape = Shape(label=label, shape_type='polygon', group_id=group_id)
+        for pt in contour[:, 0, :]:
+            new_shape.addPoint(QtCore.QPointF(float(pt[0]), float(pt[1])))
+        new_shape.close()
+        self.addLabel(new_shape)
+        self.canvas.loadShapes([item.shape() for item in self.labelList])
+
+        self.brush_mask = None
+        self.brush_active_shape = None
+        self.brush_mode = None
+        self.canvas.setBrushMode(None, 0)
+        self.actions.save.setEnabled(True)
     def addmemory(self, mask, frame_idx, is_temp=False):
         with torch.no_grad():
             mask, _ = pad_divide_by(mask, 16)

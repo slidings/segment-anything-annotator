@@ -99,6 +99,10 @@ class Canvas(QtWidgets.QWidget):
         self.hShapeIsSelected = False
         self._painter = QtGui.QPainter()
         self._cursor = CURSOR_DEFAULT
+        # Brush mode state
+        self.brush_mode = None  # 'add' or 'erase'
+        self.brush_size = 20
+        self.brush_pos = None   # current cursor position for preview circle
         # Menus:
         # 0: right-click without selection and dragging of shapes
         # 1: right-click with selection and dragging of shapes
@@ -219,7 +223,16 @@ class Canvas(QtWidgets.QWidget):
                 pos = self.transformPos(ev.posF())
         except AttributeError:
             return
-
+        # Brush mode: paint on mask and show cursor preview
+        if self.brush_mode is not None:
+            self.brush_pos = pos
+            if ev.buttons() & QtCore.Qt.LeftButton:
+                x, y = int(pos.x()), int(pos.y())
+                color = 1 if self.brush_mode == 'add' else 0
+                cv2.circle(self.app.brush_mask, (x, y), self.brush_size // 2, color, -1)
+            self.update()
+            return  # skip all other mouse logic in brush mode
+        
         self.prevMovePoint = pos
         self.restoreCursor()
 
@@ -434,6 +447,13 @@ class Canvas(QtWidgets.QWidget):
             pos = self.transformPos(ev.localPos())
         else:
             pos = self.transformPos(ev.posF())
+        if self.brush_mode is not None:
+            if ev.button() == QtCore.Qt.LeftButton:
+                x, y = int(pos.x()), int(pos.y())
+                color = 1 if self.brush_mode == 'add' else 0
+                cv2.circle(self.app.brush_mask, (x, y), self.brush_size // 2, color, -1)
+                self.update()
+            return
         if ev.button() == QtCore.Qt.LeftButton:
             if self.drawing():
                 if self.current:
@@ -948,8 +968,36 @@ class Canvas(QtWidgets.QWidget):
                 drawing_shape = tmp_mask.copy()
                 drawing_shape.fill = True
                 drawing_shape.paint(p, proposal_flag=1)
-        p.end()
+        # Draw brush mask overlay
+        if self.brush_mode is not None and self.app.brush_mask is not None:
+            mask = self.app.brush_mask
+            h, w = mask.shape[:2]
+            overlay = np.zeros((h, w, 4), dtype=np.uint8)
+            if self.brush_mode == 'add':
+                overlay[mask > 0] = [0, 200, 0, 100]   # green for added region
+            else:
+                overlay[mask > 0] = [200, 0, 0, 100]   # red for erased region
+            qimg = QtGui.QImage(overlay.data, w, h, w * 4, QtGui.QImage.Format_RGBA8888)
+            p.drawPixmap(0, 0, QtGui.QPixmap.fromImage(qimg))
 
+        # Draw brush cursor circle preview
+        if self.brush_mode is not None and self.brush_pos is not None:
+            r = self.brush_size // 2
+            color = QtGui.QColor(0, 200, 0, 180) if self.brush_mode == 'add' else QtGui.QColor(200, 0, 0, 180)
+            p.setPen(QtGui.QPen(color, 2))
+            p.setBrush(QtCore.Qt.NoBrush)
+            p.drawEllipse(self.brush_pos, r, r)
+        p.end()
+    def setBrushMode(self, mode, size):
+        """Enter or exit brush editing mode."""
+        self.brush_mode = mode
+        self.brush_size = size
+        self.brush_pos = None
+        if mode is not None:
+            self.overrideCursor(QtCore.Qt.BlankCursor)  # hide default cursor
+        else:
+            self.restoreCursor()
+        self.update()
     def transformPos(self, point):
         """Convert from widget-logical coordinates to painter-logical ones."""
         return point / self.scale - self.offsetToCenter()
@@ -1074,9 +1122,20 @@ class Canvas(QtWidgets.QWidget):
                 # zoom
                 self.zoomRequest.emit(delta.y(), ev.pos())
             else:
-                # scroll
-                self.scrollRequest.emit(delta.x(), QtCore.Qt.Horizontal)
-                self.scrollRequest.emit(delta.y(), QtCore.Qt.Vertical)
+                # If in brush mode, scroll wheel changes size of brush
+                if self.brush_mode is not None:
+                    delta_y = delta.y()
+                    if delta_y > 0:
+                        self.brush_size = min(200, self.brush_size + 5)
+                    else:
+                        self.brush_size = max(5, self.brush_size - 5)
+                    self.update()  # redraw cursor circle at new size
+                    ev.accept()
+                    return
+                else:
+                    # scroll
+                    self.scrollRequest.emit(delta.x(), QtCore.Qt.Horizontal)
+                    self.scrollRequest.emit(delta.y(), QtCore.Qt.Vertical)
         else:
             if ev.orientation() == QtCore.Qt.Vertical:
                 mods = ev.modifiers()
