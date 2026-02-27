@@ -445,19 +445,19 @@ class MainWindow(QMainWindow):
 
         # Tool bar actions to add brush
         brushAdd = action(
-            self.tr("Brush Add (P)"),
+            self.tr("Brush Add (Z)"),
             lambda: self.enableBrush('add'),
-            'p', "objects", self.tr("Brush to expand mask"), enabled=True,
+            'z', "objects", self.tr("Brush to expand mask"), enabled=True,
         )
         brushErase = action(
-            self.tr("Brush Erase (O)"),
+            self.tr("Brush Erase (X)"),
             lambda: self.enableBrush('erase'),
-            'o', "objects", self.tr("Brush to shrink mask"), enabled=True,
+            'x', "objects", self.tr("Brush to shrink mask"), enabled=True,
         )
         brushApply = action(
-            self.tr("Apply Brush (F)"),
+            self.tr("Apply Brush (C)"),
             lambda: self.applyBrush(),
-            'f', "objects", self.tr("Finalize brush edits"), enabled=True,
+            'c', "objects", self.tr("Finalize brush edits"), enabled=True,
         )
 
         self.actions = utils.struct(
