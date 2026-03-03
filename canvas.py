@@ -229,7 +229,7 @@ class Canvas(QtWidgets.QWidget):
         if self.brush_mode is not None:
             self.brush_pos = pos
             if ev.buttons() & QtCore.Qt.LeftButton:
-                x, y = int(pos.x()), int(pos.y())
+                x, y = round(pos.x()), round(pos.y())
                 color = 1 if self.brush_mode == 'add' else 0
                 cv2.circle(self.app.brush_mask, (x, y), self.brush_size // 2, color, -1)
             self.update()
@@ -451,7 +451,7 @@ class Canvas(QtWidgets.QWidget):
             pos = self.transformPos(ev.posF())
         if self.brush_mode is not None:
             if ev.button() == QtCore.Qt.LeftButton:
-                x, y = int(pos.x()), int(pos.y())
+                x, y = round(pos.x()), round(pos.y())
                 color = 1 if self.brush_mode == 'add' else 0
                 cv2.circle(self.app.brush_mask, (x, y), self.brush_size // 2, color, -1)
                 self.update()
@@ -541,9 +541,9 @@ class Canvas(QtWidgets.QWidget):
                     self.addPointToEdge()
                 elif (
                     self.selectedVertex()
-                    and int(ev.modifiers()) == QtCore.Qt.ShiftModifier
+                    and ev.modifiers() and QtCore.Qt.ControlModifier
                 ):
-                    # Delete point if: left-click + SHIFT on a point
+                    # Delete point if: left-click + control on a point
                     self.removeSelectedPoint()
 
                 group_mode = int(ev.modifiers()) == QtCore.Qt.ControlModifier
