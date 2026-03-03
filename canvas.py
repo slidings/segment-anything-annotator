@@ -104,6 +104,10 @@ class Canvas(QtWidgets.QWidget):
         self.brush_size = 20
         self.brush_pos = None   # current cursor position for preview circle
         self.hide_masks_temp = False
+        # For manual panning
+        self.pan_offset = QtCore.QPointF(0, 0)
+        self.panning = False
+        self.pan_start = None
         # Menus:
         # 0: right-click without selection and dragging of shapes
         # 1: right-click with selection and dragging of shapes
@@ -225,6 +229,25 @@ class Canvas(QtWidgets.QWidget):
                 pos = self.transformPos(ev.posF())
         except AttributeError:
             return
+        # --- Manual Pan ---
+        if (
+            self.panning
+            and ev.buttons() & QtCore.Qt.RightButton
+            and ev.modifiers() & QtCore.Qt.ControlModifier
+        ):
+            delta = ev.pos() - self.pan_start
+            self.pan_start = ev.pos()
+            self.pan_offset += delta / self.scale
+            self.update()
+            return
+        elif self.panning:
+            # Ctrl released mid-drag
+            self.panning = False
+            if self.brush_mode is not None:
+                self.overrideCursor(QtCore.Qt.BlankCursor)
+            else:
+                self.restoreCursor()
+
         # Brush mode: paint on mask and show cursor preview
         if self.brush_mode is not None:
             self.brush_pos = pos
@@ -446,9 +469,18 @@ class Canvas(QtWidgets.QWidget):
 
     def mousePressEvent(self, ev):
         if QT5:
-            pos = self.transformPos(ev.localPos())
+            pos = self.transformPos(ev.localPos()) 
         else:
             pos = self.transformPos(ev.posF())
+        # --- Ctrl = Start Pan ---
+        if (
+            ev.button() == QtCore.Qt.RightButton
+            and ev.modifiers() & QtCore.Qt.ControlModifier
+        ):
+            self.panning = True
+            self.pan_start = ev.pos()
+            self.overrideCursor(QtCore.Qt.OpenHandCursor)
+            return
         if self.brush_mode is not None:
             if ev.button() == QtCore.Qt.LeftButton:
                 x, y = round(pos.x()), round(pos.y())
@@ -697,6 +729,13 @@ class Canvas(QtWidgets.QWidget):
         #     self.prevPoint = pos
 
     def mouseReleaseEvent(self, ev):
+        if self.panning and ev.button() == QtCore.Qt.RightButton:
+            self.panning = False
+            if self.brush_mode is not None:
+                self.overrideCursor(QtCore.Qt.BlankCursor)
+            else:
+                self.restoreCursor()
+            return
         if self.brush_mode is not None:
             return  # ignore all release events in brush mode
         if ev.button() == QtCore.Qt.RightButton:
@@ -912,7 +951,8 @@ class Canvas(QtWidgets.QWidget):
         p.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
 
         p.scale(self.scale, self.scale)
-        p.translate(self.offsetToCenter())
+        # p.translate(self.offsetToCenter())
+        p.translate(self.offsetToCenter() + self.pan_offset)
 
         p.drawPixmap(0, 0, self.pixmap)
 
@@ -1005,7 +1045,7 @@ class Canvas(QtWidgets.QWidget):
         self.update()
     def transformPos(self, point):
         """Convert from widget-logical coordinates to painter-logical ones."""
-        return point / self.scale - self.offsetToCenter()
+        return point / self.scale - self.offsetToCenter() - self.pan_offset # Accoutn for panning
 
     def offsetToCenter(self):
         s = self.scale
@@ -1180,6 +1220,8 @@ class Canvas(QtWidgets.QWidget):
                 self.app.brush_mask = None
                 self.update()
             return
+        if ev.key() == QtCore.Qt.Key_Control:
+            self.overrideCursor(QtCore.Qt.OpenHandCursor)
         if self.drawing():
             if key == QtCore.Qt.Key_Escape and self.current:
                 self.current = None
@@ -1204,6 +1246,17 @@ class Canvas(QtWidgets.QWidget):
         if ev.key() == QtCore.Qt.Key_Shift:
             self.hide_masks_temp = False
             self.update()
+            return
+        if ev.key() == QtCore.Qt.Key_Control:
+            if self.panning:
+                self.panning = False
+
+            # Restore correct cursor based on mode
+            if self.brush_mode is not None:
+                self.overrideCursor(QtCore.Qt.BlankCursor)
+            else:
+                self.restoreCursor()
+
             return
         if self.drawing():
             if int(modifiers) == 0:
