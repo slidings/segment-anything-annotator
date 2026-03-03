@@ -103,6 +103,7 @@ class Canvas(QtWidgets.QWidget):
         self.brush_mode = None  # 'add' or 'erase'
         self.brush_size = 20
         self.brush_pos = None   # current cursor position for preview circle
+        self.hide_masks_temp = False
         # Menus:
         # 0: right-click without selection and dragging of shapes
         # 1: right-click with selection and dragging of shapes
@@ -937,23 +938,24 @@ class Canvas(QtWidgets.QWidget):
             )
 
         Shape.scale = self.scale
-        for shape in self.shapes:
-            if (shape.selected or not self._hideBackround) and self.isVisible(
-                shape
-            ):
-                shape.fill = shape.selected or shape == self.hShape
-                shape.paint(p)
-        if self.current:
-            self.current.paint(p)
-        if self.currentPos:
-            self.currentPos.paint(p,flag=1)
-        if self.currentNeg:
-            self.currentNeg.paint(p,flag=0)
-        if self.currentBox:
-            self.currentBox.paint(p)
-        if self.selectedShapesCopy:
-            for s in self.selectedShapesCopy:
-                s.paint(p)
+
+        # Shift key to hide all masks
+        if not self.hide_masks_temp:
+            for shape in self.shapes:
+                if (shape.selected or not self._hideBackround) and self.isVisible(shape):
+                    shape.fill = shape.selected or shape == self.hShape
+                    shape.paint(p)
+            if self.current:
+                self.current.paint(p)
+            if self.currentPos:
+                self.currentPos.paint(p,flag=1)
+            if self.currentNeg:
+                self.currentNeg.paint(p,flag=0)
+            if self.currentBox:
+                self.currentBox.paint(p)
+            if self.selectedShapesCopy:
+                for s in self.selectedShapesCopy:
+                    s.paint(p)
 
         if (
             self.fillDrawing()
@@ -1167,6 +1169,17 @@ class Canvas(QtWidgets.QWidget):
     def keyPressEvent(self, ev):
         modifiers = ev.modifiers()
         key = ev.key()
+        if ev.key() == QtCore.Qt.Key_Shift:
+            self.hide_masks_temp = True
+            self.update()
+            return
+        # --- Cancel brush mode with ESC ---
+        if self.brush_mode is not None:
+            if key == QtCore.Qt.Key_Escape:
+                self.setBrushMode(None, 0)
+                self.app.brush_mask = None
+                self.update()
+            return
         if self.drawing():
             if key == QtCore.Qt.Key_Escape and self.current:
                 self.current = None
@@ -1188,6 +1201,10 @@ class Canvas(QtWidgets.QWidget):
 
     def keyReleaseEvent(self, ev):
         modifiers = ev.modifiers()
+        if ev.key() == QtCore.Qt.Key_Shift:
+            self.hide_masks_temp = False
+            self.update()
+            return
         if self.drawing():
             if int(modifiers) == 0:
                 self.snapping = True
