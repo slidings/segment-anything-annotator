@@ -572,6 +572,13 @@ class MainWindow(QMainWindow):
         self.zoomWidget.valueChanged.connect(self.paintCanvas)
         self.canvas.actions = self.actions
 
+        # Init default video dir
+        default_dir = r" # To be configured"
+
+        if os.path.isdir(default_dir):
+            self.video_root = default_dir
+            self.clickFileChoose_from_dir(default_dir)
+
 
     def saveFileAs(self, _value=False):
         assert not self.image.isNull(), "cannot save empty image"
@@ -896,6 +903,44 @@ class MainWindow(QMainWindow):
             self.loadImg()
 
         self.clickClearTrackMemory()
+
+    def clickFileChoose_from_dir(self, directory):
+        self.video_root = directory
+        self.video_list = []
+
+        for patient in sorted(glob.glob(os.path.join(directory, '*'))):
+            for patient2 in sorted(glob.glob(os.path.join(patient, '*'))):
+                for date in sorted(glob.glob(os.path.join(patient2, '*'))):
+                    for accession in sorted(glob.glob(os.path.join(date, '*'))):
+                        imgs = glob.glob(os.path.join(accession, '*.jpg')) + \
+                            glob.glob(os.path.join(accession, '*.png'))
+                        if imgs:
+                            self.video_list.append(accession)
+
+        self.video_len = len(self.video_list)
+        if self.video_len == 0:
+            return
+
+        self.video_slider.setMinimum(0)
+        self.video_slider.setMaximum(self.video_len - 1)
+        self.video_slider.setValue(0)
+        self.video_slider.setEnabled(True)
+
+        self.current_video_index = 0
+        self.current_video = self.video_list[0]
+
+        self.img_list = sorted(
+            glob.glob(os.path.join(self.current_video, '*.jpg')) +
+            glob.glob(os.path.join(self.current_video, '*.png'))
+        )
+
+        self.img_len = len(self.img_list)
+        if self.img_len == 0:
+            return
+
+        self.current_img_index = 0
+        self.current_img = self.img_list[0]
+        self.loadImg()
 
     def clickFileChoose(self):
         directory = QFileDialog.getExistingDirectory(self, 'choose target fold', '.')
