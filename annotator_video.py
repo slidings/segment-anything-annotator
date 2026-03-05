@@ -137,6 +137,11 @@ class MainWindow(QMainWindow):
         self.shape_dock.setWidget(self.labelList)
 
         self.category_list = [i.strip() for i in open('categories.txt', 'r', encoding='utf-8').readlines()]
+        self.class_color_map = {
+            "left_maxillary_sinus": QtGui.QColor(220, 60, 170),
+            "right_maxillary_sinus": QtGui.QColor(230, 140, 20),
+            "normal_region": QtGui.QColor(0, 150, 170),
+        }
         self.labelDialog = LabelDialog(
             parent=self,
             labels=self.category_list,
@@ -197,7 +202,6 @@ class MainWindow(QMainWindow):
         self.img_progress_bar.setMaximum(1)
         self.img_progress_bar.setValue(0)
         self.img_progress_bar.setFormat("%v / %m")
-
 
         # self.video_progress_bar = QProgressBar(self)
         # self.video_progress_bar.setMinimum(0)
@@ -356,7 +360,7 @@ class MainWindow(QMainWindow):
             'None',
             "objects",
             self.tr("Save Directory"),
-            enabled=True,
+            enabled=False,
         )
 
         createMode = action(
@@ -463,19 +467,19 @@ class MainWindow(QMainWindow):
 
         # Tool bar actions to add brush
         brushAdd = action(
-            self.tr("Brush Add (P)"),
+            self.tr("Brush Add (z)"),
             lambda: self.enableBrush('add'),
-            'p', "objects", self.tr("Brush to expand mask"), enabled=True,
+            'z', "objects", self.tr("Brush to expand mask"), enabled=True,
         )
         brushErase = action(
-            self.tr("Brush Erase (O)"),
+            self.tr("Brush Erase (x)"),
             lambda: self.enableBrush('erase'),
-            'o', "objects", self.tr("Brush to shrink mask"), enabled=True,
+            'x', "objects", self.tr("Brush to shrink mask"), enabled=True,
         )
         brushApply = action(
-            self.tr("Apply Brush (F)"),
+            self.tr("Apply Brush (c)"),
             lambda: self.applyBrush(),
-            'f', "objects", self.tr("Finalize brush edits"), enabled=True,
+            'c', "objects", self.tr("Finalize brush edits"), enabled=True,
         )
 
         self.actions = utils.struct(
@@ -1760,7 +1764,8 @@ class MainWindow(QMainWindow):
 
     def _update_shape_color(self, shape):
         # r, g, b = self._get_rgb_by_label(shape.label)
-        r, g, b = self._get_rgb_by_label(shape.group_id)
+        color = self.class_color_map.get(shape.label, QtGui.QColor(0, 180, 0))
+        r, g, b = color.red(), color.green(), color.blue()
         shape.line_color = QtGui.QColor(r, g, b)
         shape.vertex_fill_color = QtGui.QColor(r, g, b)
         shape.hvertex_fill_color = QtGui.QColor(255, 255, 255)
