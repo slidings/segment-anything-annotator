@@ -1024,7 +1024,8 @@ class MainWindow(QMainWindow):
 
     def clickLoadSAM(self):
         download_model(self.model_type)
-        self.sam = sam_model_registry[self.model_type](checkpoint='{}.pth'.format(self.model_type))
+        # self.sam = sam_model_registry[self.model_type](checkpoint='{}.pth'.format(self.model_type))
+        self.sam = sam_model_registry[self.model_type](checkpoint='medsam_vit_b.pth')
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.sam.to(device=self.device)
         self.predictor = SamPredictor(self.sam)
